@@ -7,17 +7,17 @@ import {
 } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaClient } from '@prisma/client';
-import { CreateOrderDto } from './dto/create-order.dto';
+import { firstValueFrom } from 'rxjs';
+import { NATS_SERVICE } from 'src/config';
 import { ChangeOrderStatusDto, OrderPaginationDto } from './dto';
-import { PRODUCT_SERVICE } from 'src/config';
-import { catchError, firstValueFrom } from 'rxjs';
+import { CreateOrderDto } from './dto/create-order.dto';
 
 @Injectable()
 export class OrdersService extends PrismaClient implements OnModuleInit {
   private readonly logger = new Logger('OrdersServices');
 
   constructor(
-    @Inject(PRODUCT_SERVICE) private readonly productsClient: ClientProxy,
+    @Inject(NATS_SERVICE) private readonly client: ClientProxy,
   ) {
     super();
   }
@@ -33,7 +33,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
       const productIds = createOrderDto.items.map((item) => item.productId);
       //* llama al microservicio products
       const products: any[] = await firstValueFrom(
-        this.productsClient.send({ cmd: 'validate_products' }, productIds),
+        this.client.send({ cmd: 'validate_products' }, productIds),
       );
 
       //2. Cálculos de los valores
@@ -93,7 +93,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
   }
 
   async findAll(orderPaginationDto: OrderPaginationDto) {
-    // $trsansaction para mejorar el rendimiento
+    // $transaction para mejorar el rendimiento
     const [orders, totalPages] = await this.$transaction([
       this.order.findMany({
         skip: (orderPaginationDto.page - 1) * orderPaginationDto.limit,
@@ -141,7 +141,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
     const productsIds = order.OrderItem.map((orderItem) => orderItem.productId);
     const products: any[] = await firstValueFrom(
-      this.productsClient.send({ cmd: 'validate_products' }, productsIds),
+      this.client.send({ cmd: 'validate_products' }, productsIds),
     );
 
     return {
